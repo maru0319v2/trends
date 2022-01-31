@@ -1,9 +1,11 @@
 # Twitter Trends Summary
+### 概要
+* Twitterのトレンド情報を定期的に自動取得しDynamoDBに蓄積、トレンドの順位でポイントをつける。毎日夜に集計し結果を自動ツイートするプログラム。
 
 ### 処理概要
 * getTrends.py -> TwitterAPIを叩きレスポンスのトレンド情報をDynamoDBにインサート
 * postTrends.py -> DynamoDBからトレンド情報を取得、集計してhttps://twitter.com/BuzChecker へ投稿する
-* AWS lambdaに配置し定期実行することを想定。DBはDynamoDBを使用
+* AWS lambdaに配置し定期実行することを想定。
 -------
 ### getTrends.pyの処理
 #### 1.TwitterAPIからトレンド情報を取得
