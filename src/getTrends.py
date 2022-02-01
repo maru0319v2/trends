@@ -6,8 +6,6 @@ import pprint
 from boto3.session import Session
 import config
 
-URL = "https://api.twitter.com/1.1/trends/place.json?id=23424856"
-
 
 def main():
     # トレンドを取得する
@@ -21,13 +19,11 @@ def main():
 # トレンドを取得する
 def get_trend():
     # 認証しレスポンス取得
-    response = requests.get(URL, auth=OAuth1(config.CK, config.CKS, config.AT, config.ATS))
+    response = requests.get("https://api.twitter.com/1.1/trends/place.json?id=23424856", auth=OAuth1(config.CK, config.CKS, config.AT, config.ATS))
     dicts = response.json()[0]['trends']
 
     # 現在時刻の取得(JST)
-    t_delta = datetime.timedelta(hours=9)
-    jst = datetime.timezone(t_delta, 'JST')
-    now = datetime.datetime.now(jst)
+    now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9), 'JST'))
     date = now.strftime("%Y%m%d")
     time = now.strftime("%H%M")
 
