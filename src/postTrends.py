@@ -1,39 +1,67 @@
+import json
 import pprint
 import datetime
-
+import locale
 import twitter
 from boto3.dynamodb.conditions import Key
 from boto3.session import Session
+from requests_oauthlib import OAuth1Session
+
 import config
+
+auth = twitter.OAuth(
+    consumer_key=config.CK,
+    consumer_secret=config.CKS,
+    token=config.AT,
+    token_secret=config.ATS
+)
+t = twitter.Twitter(auth=auth)
 
 
 def main():
     # 読み込むDynamoDBの情報を取得
-    table = get_dynamo_table()
+    table = get_table()
     # DBから条件に合致するトレンド情報取得
     dicts = get_trends(table)
 
     # 取得結果を集計する
     totalled_dicts = totalling_dicts(dicts)
-    # 集計結果をポイントの降順でソートする
-    totalled_dicts = sorted(totalled_dicts, key=lambda x: x['point'], reverse=True)
 
-    # 集計結果表示
-    print('Totalled items: %d' % len(totalled_dicts))
+    # POST用文字列生成しツイートする(1位～5位)
+    post_str = generate_post_str(dicts[0]['date'], totalled_dicts, 0)
+    tweet(post_str, None)
 
-    # POST用文字列生成
-    post_str = str(dicts[0]['date'])
-    post_str = str(post_str[4:6]) + "/" + str(post_str[6:8]) + "トレンド集計結果\n" + \
-               "1位 (" + str(totalled_dicts[0]['point']) + "pt) " + str(totalled_dicts[0]['trend']) + "\n" + \
-               "2位 (" + str(totalled_dicts[1]['point']) + "pt) " + str(totalled_dicts[1]['trend']) + "\n" + \
-               "3位 (" + str(totalled_dicts[2]['point']) + "pt) " + str(totalled_dicts[2]['trend']) + "\n" + \
-               "4位 (" + str(totalled_dicts[3]['point']) + "pt) " + str(totalled_dicts[3]['trend']) + "\n" + \
-               "5位 (" + str(totalled_dicts[4]['point']) + "pt) " + str(totalled_dicts[4]['trend'])
+    # POST用文字列生成しツイートする(6位～10位)
+    post_str = generate_post_str(dicts[0]['date'], totalled_dicts, 1)
+    tweet(post_str, get_latest_id()['id'])
 
-    pprint.pprint(post_str)
 
-    # トレンド情報をツイートする
-    tweet(post_str)
+# 読み込むDynamoDBの情報を取得
+def get_table():
+    session = Session(
+        aws_access_key_id=config.AAK,
+        aws_secret_access_key=config.AAS,
+        region_name=config.REGION_NAME
+    )
+    dynamodb = session.resource('dynamodb')
+    dynamo_table = dynamodb.Table('trendsData')
+    return dynamo_table
+
+
+# DBから条件に合致するトレンド情報取得
+def get_trends(table):
+    now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9), 'JST'))
+    date = int(now.strftime("%Y%m%d"))
+
+    # 今日の日付(例.20220130)でクエリ
+    response = table.query(
+        KeyConditionExpression=Key('date').eq(date))
+
+    # 取得結果の表示
+    dicts = response['Items']
+    print('Queried items: %d' % len(dicts))
+
+    return dicts
 
 
 # 取得結果を集計する  1位=50pt,2位=49pt・・・50位=1pt
@@ -46,8 +74,8 @@ def totalling_dicts(origin_dicts):
         # 重複判定フラグ
         duplicate_flg = False
         # _で文字列を区切り_から後部分だけ取り出してポイントを付ける (例.'0059_1' -> 50)
-        splited_str = origin_dict['timeRank'].split('_')
-        rank = splited_str[1]
+        split_str = origin_dict['timeRank'].split('_')
+        rank = split_str[1]
         point = 51 - int(rank)
         trend = origin_dict['value']
 
@@ -67,52 +95,61 @@ def totalling_dicts(origin_dicts):
             # 重複していない場合は集計用辞書に追記する
             totalled_dicts.append({'trend': trend, 'point': point})
 
+    # 集計結果をポイントの降順でソートする
+    totalled_dicts = sorted(totalled_dicts, key=lambda x: x['point'], reverse=True)
+    # 集計結果表示
+    print('Totalled items: %d' % len(totalled_dicts))
     return totalled_dicts
 
 
-# DBから条件に合致するトレンド情報取得
-def get_trends(table):
-    t_delta = datetime.timedelta(hours=9)
-    jst = datetime.timezone(t_delta, 'JST')
-    now = datetime.datetime.now(jst)
-    date = int(now.strftime("%Y%m%d"))
+# POST用文字列生成
+def generate_post_str(date, totalled_dicts, flg):
+    year = int(str(date)[:4])
+    month = int(str(date)[4:6])
+    day = int(str(date)[6:8])
+    # 曜日を判定する
+    locale.setlocale(locale.LC_TIME, 'ja_JP.UTF-8')
+    date = datetime.date(year, month, day)
+    week = date.strftime('%a')
 
-    # 今日の日付(例.20220130)でクエリ
-    response = table.query(
-        KeyConditionExpression=Key('date').eq(date))
+    post_str = str(year) + "年" + str(month) + "月" + str(day) + "日(" + week + ")トレンド日別集計" + str(1 if flg == 0 else 2) + "/2\n"
+    for i in range(5):
+        end_str = "\n" if i != 4 else ""
+        line = str(i + 1 if flg == 0 else i + 6) + "位(" + str(
+            totalled_dicts[i if flg == 0 else i + 6]['point']) + "p) " \
+                    + str(totalled_dicts[i if flg == 0 else i + 6]['trend']) + end_str
+        post_str += line
 
-    # 取得結果の表示
-    dicts = response['Items']
-    print('Queried items: %d' % len(dicts))
+    # 140文字オーバーしている場合、最後の行を削除
+    if len(post_str) > 140:
+        post_str = post_str.rstrip("\n"+line)
 
-    return dicts
-
-
-# 読み込むDynamoDBの情報を取得
-def get_dynamo_table():
-    session = Session(
-        aws_access_key_id=config.AAK,
-        aws_secret_access_key=config.AAS,
-        region_name=config.REGION_NAME
-    )
-    dynamodb = session.resource('dynamodb')
-    dynamo_table = dynamodb.Table('trendsData')
-    return dynamo_table
+    pprint.pprint(post_str)
+    return post_str
 
 
-# トレンド情報をツイートする
-def tweet(text):
-    auth = twitter.OAuth(
-        consumer_key=config.CK,
-        consumer_secret=config.CKS,
-        token=config.AT,
-        token_secret=config.ATS
-    )
+# ツイートする
+def tweet(post_str, latest_id):
+    t.statuses.update(status=post_str, in_reply_to_status_id=latest_id)
+    print('Successfully posted trends. length = ' + str(len(post_str)))
 
-    t = twitter.Twitter(auth=auth)
-    status = text
-    t.statuses.update(status=status)
-    print('Successfully posted trends.')
+
+# 最新ツイートIDを取得
+def get_latest_id():
+    url = 'https://api.twitter.com/1.1/statuses/user_timeline.json'
+    params = {
+        "count": 1,
+        "exclude_replies": True,
+        "include_rts": False
+    }
+    latest_tweet_auth = OAuth1Session(config.CK, config.CKS, config.AT, config.ATS)
+    req = latest_tweet_auth.get(url, params=params)
+
+    if req.status_code == 200:
+        latest_tweet = json.loads(req.text)[0]
+        return latest_tweet
+    else:
+        return req.status_code
 
 
 if __name__ == '__main__':
