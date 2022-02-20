@@ -1,4 +1,4 @@
-# Twitter Trends Summary
+# Twitter Trends
 ### 概要
 * Twitterのトレンド情報を定期的に自動取得しDynamoDBに蓄積、トレンドの順位でポイントをつける。毎日夜に集計し結果を自動ツイートするプログラム。
 
@@ -6,6 +6,10 @@
 * getTrends.py -> TwitterAPIを叩きレスポンスのトレンド情報をDynamoDBにインサート
 * postTrends.py -> DynamoDBからトレンド情報を取得、集計してhttps://twitter.com/BuzChecker へ投稿する
 * AWS lambdaに配置し定期実行することを想定。
+
+
+![フロー](https://user-images.githubusercontent.com/94233243/154848672-2afd1dba-0f57-431b-96de-1e8cc72be8b4.png)
+
 -------
 ### getTrends.pyの処理
 #### 1.TwitterAPIからトレンド情報を取得
@@ -68,4 +72,5 @@ id = 23424856 とすることで日本のトレンド情報を取得できる
 
 #### 2.トレンド情報をツイート
 ポイントの降順に辞書リストをソートし上から5個のレイアウトを整えてツイートする。
-![サンプル](https://i.imgur.com/onMJl4A.png)
+
+![a](https://user-images.githubusercontent.com/94233243/154848796-323884c5-5fd2-4206-9ea4-8efa8bad01e8.png)
