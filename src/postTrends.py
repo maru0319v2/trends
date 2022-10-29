@@ -2,21 +2,33 @@ import json
 import pprint
 import datetime
 import locale
+import boto3
 import twitter
 import unicodedata
 from boto3.dynamodb.conditions import Key
 from boto3.session import Session
 from requests_oauthlib import OAuth1Session
+from botocore.exceptions import ClientError
 
-import config
 
-auth = twitter.OAuth(
-    consumer_key=config.CK,
-    consumer_secret=config.CKS,
-    token=config.AT,
-    token_secret=config.ATS
+session = boto3.session.Session()
+client = session.client(
+    service_name='secretsmanager',
+    region_name="ap-northeast-1"
 )
-t = twitter.Twitter(auth=auth)
+try:
+    get_secret_value_response = client.get_secret_value(
+        SecretId="dev/twiTrend"
+    )
+except ClientError as e:
+    raise e
+secret = json.loads(get_secret_value_response['SecretString'])
+TW_CONSUMER_KEY = secret['TW_CONSUMER_KEY']
+TW_CONSUMER_KEY_SECRET = secret['TW_CONSUMER_KEY_SECRET']
+TW_ACCESS_TOKEN = secret['TW_ACCESS_TOKEN']
+TW_ACCESS_TOKEN_SECRET = secret['TW_ACCESS_TOKEN_SECRET']
+AWS_ACCESS_KEY = secret['AWS_ACCESS_KEY']
+AWS_ACCESS_SECRET = secret['AWS_ACCESS_SECRET']
 
 
 def lambda_handler(event, lambda_context):
@@ -36,9 +48,9 @@ def lambda_handler(event, lambda_context):
 # 読み込むDynamoDBの情報を取得
 def get_table():
     session = Session(
-        aws_access_key_id=config.AAK,
-        aws_secret_access_key=config.AAS,
-        region_name=config.REGION_NAME
+        aws_access_key_id=AWS_ACCESS_KEY,
+        aws_secret_access_key=AWS_ACCESS_SECRET,
+        region_name="ap-northeast-1"
     )
     dynamodb = session.resource('dynamodb')
     dynamo_table = dynamodb.Table('trendsData')
@@ -144,5 +156,12 @@ def count_text(message):
 
 # ツイートする
 def tweet(post_str, latest_id):
+    auth = twitter.OAuth(
+        consumer_key=TW_CONSUMER_KEY,
+        consumer_secret=TW_CONSUMER_KEY_SECRET,
+        token=TW_ACCESS_TOKEN,
+        token_secret=TW_ACCESS_TOKEN_SECRET
+    )
+    t = twitter.Twitter(auth=auth)
     t.statuses.update(status=post_str, in_reply_to_status_id=latest_id)
     print('Successfully posted trends. length = ' + str(len(post_str)))
