@@ -5,10 +5,10 @@
 ### 処理概要
 * getTrends.py -> TwitterAPIを叩きレスポンスのトレンド情報をDynamoDBにインサート
 * postTrends.py -> DynamoDBからトレンド情報を取得、集計してhttps://twitter.com/BuzChecker へ投稿する
-* AWS lambdaに配置し定期実行することを想定。
+* AWS lambdaに配置し定期実行。
 
 
-![フロー](https://user-images.githubusercontent.com/94233243/154848672-2afd1dba-0f57-431b-96de-1e8cc72be8b4.png)
+![構成図](https://user-images.githubusercontent.com/94233243/198755901-bcf42a4f-8da8-4f1b-aae1-aefb5afb60ba.png)
 
 -------
 ### getTrends.pyの処理
@@ -71,6 +71,7 @@ id = 23424856 とすることで日本のトレンド情報を取得できる
 同じトレンド名が存在する場合はポイントを合算する。
 
 #### 2.トレンド情報をツイート
-ポイントの降順に辞書リストをソートし上から5個のレイアウトを整えてツイートする。
+ポイントの降順に辞書リストをソートしレイアウトを整えてツイートする。
 
-![a](https://user-images.githubusercontent.com/94233243/154848796-323884c5-5fd2-4206-9ea4-8efa8bad01e8.png)
+![a](https://user-images.githubusercontent.com/94233243/198756198-e850a249-0f50-40fc-9368-6d9228df94d6.png)
+
