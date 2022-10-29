@@ -1,10 +1,31 @@
 import datetime
-
+import json
+import boto3
 from requests_oauthlib import OAuth1
 import requests
 import pprint
 from boto3.session import Session
-import config
+from botocore.exceptions import ClientError
+
+
+session = boto3.session.Session()
+client = session.client(
+    service_name='secretsmanager',
+    region_name="ap-northeast-1"
+)
+try:
+    get_secret_value_response = client.get_secret_value(
+        SecretId="dev/twiTrend"
+    )
+except ClientError as e:
+    raise e
+secret = json.loads(get_secret_value_response['SecretString'])
+TW_CONSUMER_KEY = secret['TW_CONSUMER_KEY']
+TW_CONSUMER_KEY_SECRET = secret['TW_CONSUMER_KEY_SECRET']
+TW_ACCESS_TOKEN = secret['TW_ACCESS_TOKEN']
+TW_ACCESS_TOKEN_SECRET = secret['TW_ACCESS_TOKEN_SECRET']
+AWS_ACCESS_KEY = secret['AWS_ACCESS_KEY']
+AWS_ACCESS_SECRET = secret['AWS_ACCESS_SECRET']
 
 
 def lambda_handler(event, context):
@@ -19,7 +40,12 @@ def lambda_handler(event, context):
 # トレンドを取得する
 def get_trend():
     # 認証しレスポンス取得
-    response = requests.get("https://api.twitter.com/1.1/trends/place.json?id=23424856", auth=OAuth1(config.CK, config.CKS, config.AT, config.ATS))
+    response = requests.get("https://api.twitter.com/1.1/trends/place.json?id=23424856", auth=OAuth1(
+        TW_CONSUMER_KEY,
+        TW_CONSUMER_KEY_SECRET,
+        TW_ACCESS_TOKEN,
+        TW_ACCESS_TOKEN_SECRET
+    ))
     dicts = response.json()[0]['trends']
 
     # 現在時刻の取得(JST)
@@ -47,9 +73,9 @@ def get_trend():
 # DynamoDBの情報を取得
 def get_dynamo_table():
     session = Session(
-        aws_access_key_id=config.AAK,
-        aws_secret_access_key=config.AAS,
-        region_name=config.REGION_NAME
+        aws_access_key_id=AWS_ACCESS_KEY,
+        aws_secret_access_key=AWS_ACCESS_SECRET,
+        region_name="ap-northeast-1"
     )
 
     dynamodb = session.resource('dynamodb')
