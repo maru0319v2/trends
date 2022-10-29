@@ -7,7 +7,7 @@ from boto3.session import Session
 import config
 
 
-def main():
+def lambda_handler(event, context):
     # トレンドを取得する
     trends_dict = get_trend()
     # DynamoDB情報取得
@@ -63,7 +63,3 @@ def insert_data_from_json(table, trends_dict):
         for record in trends_dict:
             batch.put_item({k: v for k, v in record.items()})
     print('Successfully inserted Trends into DynamoDB.')
-
-
-if __name__ == '__main__':
-    main()
