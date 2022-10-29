@@ -3,6 +3,7 @@ import pprint
 import datetime
 import locale
 import twitter
+import unicodedata
 from boto3.dynamodb.conditions import Key
 from boto3.session import Session
 from requests_oauthlib import OAuth1Session
@@ -18,7 +19,7 @@ auth = twitter.OAuth(
 t = twitter.Twitter(auth=auth)
 
 
-def main():
+def lambda_handler(event, lambda_context):
     # 読み込むDynamoDBの情報を取得
     table = get_table()
     # DBから条件に合致するトレンド情報取得
@@ -27,13 +28,9 @@ def main():
     # 取得結果を集計する
     totalled_dicts = totalling_dicts(dicts)
 
-    # POST用文字列生成しツイートする(1位～5位)
-    post_str = generate_post_str(dicts[0]['date'], totalled_dicts, 0)
+    # POST用文字列生成しツイートする
+    post_str = generate_post_str(dicts[0]['date'], totalled_dicts)
     tweet(post_str, None)
-
-    # POST用文字列生成しツイートする(6位～10位)
-    post_str = generate_post_str(dicts[0]['date'], totalled_dicts, 1)
-    tweet(post_str, get_latest_id()['id'])
 
 
 # 読み込むDynamoDBの情報を取得
@@ -103,7 +100,7 @@ def totalling_dicts(origin_dicts):
 
 
 # POST用文字列生成
-def generate_post_str(date, totalled_dicts, flg):
+def generate_post_str(date, totalled_dicts):
     year = int(str(date)[:4])
     month = int(str(date)[4:6])
     day = int(str(date)[6:8])
@@ -112,45 +109,40 @@ def generate_post_str(date, totalled_dicts, flg):
     date = datetime.date(year, month, day)
     week = date.strftime('%a')
 
-    post_str = str(year) + "年" + str(month) + "月" + str(day) + "日(" + week + ")トレンド日別集計" + str(1 if flg == 0 else 2) + "/2\n"
-    for i in range(5):
-        end_str = "\n" if i != 4 else ""
-        line = str(i + 1 if flg == 0 else i + 6) + "位(" + str(
-            totalled_dicts[i if flg == 0 else i + 6]['point']) + "p) " \
-                    + str(totalled_dicts[i if flg == 0 else i + 6]['trend']) + end_str
+    post_str = str(year) + "年" + str(month) + "月" + str(day) + "日(" + week + ")上位トレンド集計" + "\n"
+    i = 0
+    # 全角は2、半角は1として合計280まで投稿できる。
+    while count_text(post_str) < 280:
+        line = str(i + 1) + "位(" + str(totalled_dicts[i]['point']) + "p) " + str(totalled_dicts[i]['trend']) + "\n"
         post_str += line
-
-    # 140文字オーバーしている場合、最後の行を削除
-    if len(post_str) > 140:
-        post_str = post_str.rstrip("\n"+line)
+        i += 1
+    post_str = post_str.rstrip("\n" + line)
 
     pprint.pprint(post_str)
     return post_str
+
+
+# 文字数判定
+def count_text(message):
+    text_length = 0
+    for i in message:
+        letter = unicodedata.east_asian_width(i)
+        if letter == 'H':  # 半角
+            text_length = text_length + 1
+        elif letter == 'Na':  # 半角
+            text_length = text_length + 1
+        elif letter == 'F':  # 全角
+            text_length = text_length + 2
+        elif letter == 'A':  # 全角
+            text_length = text_length + 2
+        elif letter == 'W':  # 全角
+            text_length = text_length + 2
+        else:  # 半角
+            text_length = text_length + 1
+    return text_length
 
 
 # ツイートする
 def tweet(post_str, latest_id):
     t.statuses.update(status=post_str, in_reply_to_status_id=latest_id)
     print('Successfully posted trends. length = ' + str(len(post_str)))
-
-
-# 最新ツイートIDを取得
-def get_latest_id():
-    url = 'https://api.twitter.com/1.1/statuses/user_timeline.json'
-    params = {
-        "count": 1,
-        "exclude_replies": True,
-        "include_rts": False
-    }
-    latest_tweet_auth = OAuth1Session(config.CK, config.CKS, config.AT, config.ATS)
-    req = latest_tweet_auth.get(url, params=params)
-
-    if req.status_code == 200:
-        latest_tweet = json.loads(req.text)[0]
-        return latest_tweet
-    else:
-        return req.status_code
-
-
-if __name__ == '__main__':
-    main()
