@@ -7,8 +7,7 @@
 * postTrends.py -> DynamoDBからトレンド情報を取得、集計してhttps://twitter.com/BuzChecker へ投稿する
 * AWS lambdaに配置し定期実行。
 
-
-![構成図](https://user-images.githubusercontent.com/94233243/198755901-bcf42a4f-8da8-4f1b-aae1-aefb5afb60ba.png)
+![trend構成図](https://user-images.githubusercontent.com/94233243/198758165-1dbbcec5-8107-47ad-9bb2-40da12e020e1.png)
 
 -------
 ### getTrends.pyの処理
